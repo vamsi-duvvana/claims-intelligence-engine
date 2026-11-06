@@ -2,8 +2,45 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import ClaimAssessment from './ClaimAssessment';
+import { claimDraftExample, handoffExamples } from './examples';
 
 describe('Four-role workflow', () => {
+  it('completes a newly raised claim using editable dummy data at every handoff', async () => {
+    const user = userEvent.setup();
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    render(<ClaimAssessment />);
+    await user.click(screen.getByRole('button', { name: '+ Raise a claim' }));
+    await user.click(screen.getByRole('button', { name: 'Fill dummy claim' }));
+    expect(screen.getByLabelText('Proposed claim')).toHaveValue(claimDraftExample.text);
+    expect(screen.getByLabelText('Business brief')).toHaveValue(claimDraftExample.brief);
+    await user.type(screen.getByLabelText('Project title'), ' · demo');
+    await user.click(screen.getByRole('button', { name: 'Send to Claim manager' }));
+    await user.click(screen.getByRole('button', { name: /Alex Martin/ }));
+    await user.click(screen.getByRole('button', { name: 'Fill dummy match' }));
+    expect(screen.getByLabelText('Existing formula')).toHaveValue('PARIS-RI-002-v1');
+    await user.click(screen.getByRole('button', { name: 'Send to Scientist' }));
+    await user.click(screen.getByRole('button', { name: /Léa Moreau/ }));
+    await user.click(screen.getByRole('button', { name: 'Fill dummy recommendation' }));
+    await user.click(screen.getByRole('button', { name: 'Send to Evaluator' }));
+    await user.click(screen.getByRole('button', { name: /Sofia Bernard/ }));
+    expect(screen.getByRole('button', { name: 'Sign off & send to Business' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Fill dummy study' }));
+    expect(screen.getByLabelText('Study evidence').value).toContain('PARIS-RI-002-v1');
+    await user.click(screen.getByRole('button', { name: 'Load dummy assessment' }));
+    await user.click(screen.getByRole('button', { name: 'Fill dummy review' }));
+    expect(screen.getByLabelText('Your reasoning and conditions')).toHaveValue(handoffExamples.evaluator.medium.notes);
+    await user.click(screen.getByRole('button', { name: 'Sign off & send to Business' }));
+    await user.click(screen.getByRole('button', { name: /Maya Laurent/ }));
+    expect(screen.getByText(handoffExamples.evaluator.medium.notes)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Fill dummy decision' }));
+    await user.click(screen.getByRole('button', { name: 'Record business decision' }));
+    expect(screen.getByText('Hold for further work')).toBeInTheDocument();
+    expect(screen.getByText(handoffExamples.business.medium.notes)).toBeInTheDocument();
+    expect(screen.getAllByText(/Decision recorded/).length).toBeGreaterThan(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('shows all confidence cases and blocks a business decision before human review', () => {
     render(<ClaimAssessment />);
     for (const score of ['92%', '64%', '28%']) expect(screen.getAllByText(score).length).toBeGreaterThan(0);

@@ -4,6 +4,27 @@ export const products = [
   { id: 'renewal-night', name: 'Renewal night cream', category: 'Wrinkle care', formulas: ['PARIS-RI-003-v2'], match: 'Related product: night-use formulation; needs its own claim-relevant evidence.' },
 ];
 
+export const claimDraftExample = {
+  title: 'Renewal light cream · new launch claim',
+  text: 'Reduces wrinkle depth by 20% on average in 4 weeks',
+  brief: 'Explore a measurable wrinkle-care claim for adults aged 40–65 using the cream twice daily. Review the existing product and pilot evidence before deciding whether to invest in a confirmatory study.',
+};
+
+export const handoffExamples = {
+  manager: { productId: 'renewal-light', formulaVersion: 'PARIS-RI-002-v1', notes: 'Renewal light cream is the closest existing texture and benefit match. Start with formula PARIS-RI-002-v1 and ask the scientist to review its pilot data.' },
+  scientist: { notes: 'Keep the matched formula for this evaluation. Assess its finished-formula study before deciding whether to reformulate or commission further tests.' },
+  evaluator: {
+    high: { outcome: 'support', notes: 'The synthetic study supports the average four-week benefit for the studied adults and twice-daily use. Keep those conditions explicit in the wording and verify the full report before publication.' },
+    medium: { outcome: 'more-evidence', notes: 'The pilot interval includes improvements below 20%, and comparator results are missing. Request a confirmatory study and hold the quantified wording for now.' },
+    low: { outcome: 'more-evidence', notes: 'Consumer impressions do not substantiate a quantified wrinkle-depth claim. Request a verified finished-formula study with four-week measurements before reconsidering it.' },
+  },
+  business: {
+    high: { outcome: 'proceed', notes: 'Proceed to the next internal review stage under the evaluator’s stated conditions. This is not permission to publish the claim or launch the product.' },
+    medium: { outcome: 'hold', notes: 'Hold the 20% claim and further launch investment until the evaluator has the confirmatory study. Revisit the wording once the uncertainty is resolved.' },
+    low: { outcome: 'hold', notes: 'Hold this claim until direct finished-formula evidence is available. Ask the scientific team to define the required study before further investment.' },
+  },
+};
+
 export const scenarios = {
   high: {
     label: 'Strong evidence', confidence: 0.92, verdict: 'SUPPORTED',

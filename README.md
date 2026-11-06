@@ -38,7 +38,7 @@ These are fixed dummy scores and explanations, not generated AI results or clini
 2. Switch to **Evaluator**. Read the synthetic study, recommendation and missing evidence.
 3. Record a conclusion and rationale, then **Sign off & send to Business**. An evaluator can agree with or challenge the AI.
 4. Return to **Business**. The summary now includes the human conclusion. Record a proceed, hold or stop decision with a reason.
-5. Use **Raise a claim** to walk through the entire flow: Business → Claim manager → Scientist → Evaluator → Business. The manager has a dummy wrinkle-care shortlist, not an automated similarity search.
+5. For a new claim from scratch, select **Raise a claim → Fill dummy claim → Send to Claim manager**. Switch roles and use **Fill dummy match**, **Fill dummy recommendation**, **Fill dummy study**, **Load dummy assessment**, **Fill dummy review**, and finally **Fill dummy decision**. Confirm each handoff with its send/sign-off button. This completes the 64% pilot case with a human-reviewed hold decision, without typing or an API key. All filled values remain editable. The manager has a dummy wrinkle-care shortlist, not an automated similarity search.
 
 A proposed new formula requires a new version reference and fresh evidence. It does not inherit an earlier assessment. Editing study text also clears its assessment. All dummy changes live in memory and reset on refresh; **Reset dummy workspace** restores the original cases. Keep the same tab open while switching roles.
 

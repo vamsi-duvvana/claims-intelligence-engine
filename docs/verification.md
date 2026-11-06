@@ -6,7 +6,7 @@ Updated 6 November 2026. Checked with Node 22 and PostgreSQL 17 in Docker.
 |---|---|
 | Backend TypeScript and frontend production builds | Passed |
 | Gemini HTTP/service tests | 19 passed |
-| React/workflow tests | 12 passed |
+| React/workflow tests | 13 passed |
 | PostgreSQL integration tests | 2 passed |
 | Existing schema migration | No pending changes; existing data preserved |
 | Browser dummy walkthrough | Evaluator conclusion reached Business; final hold decision recorded |
@@ -17,6 +17,8 @@ Updated 6 November 2026. Checked with Node 22 and PostgreSQL 17 in Docker.
 Tests control Gemini HTTP responses; they do not establish real provider availability or scientific accuracy. They verify the REST request shape, key header, structured response parsing, blocks/truncation/errors, confidence bounds, persistence and rollback. Frontend checks include all four handoffs, a new formula proposal, required human notes, no confidence-based bypass, live-vs-dummy result labels and stale-result clearing.
 
 Dummy workflow changes are memory-only and reset on refresh. Live assessment records are saved to PostgreSQL, but reviewer and Business decisions are not yet server-backed.
+
+The new-claim walkthrough was also completed from a blank form using the editable dummy-fill buttons at every role. The newly raised claim reached product matching, scientific review, study assessment, human sign-off and a final Business hold decision without a Gemini call. A frontend test covers the same complete path.
 
 ## Evaluator demo
 
