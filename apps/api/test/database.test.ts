@@ -3,7 +3,6 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import OpenAI from 'openai';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -18,11 +17,13 @@ describe('HTTP → service → PostgreSQL', () => {
   let prisma: PrismaService;
 
   beforeAll(async () => {
-    vi.stubEnv('OPENAI_MODEL', 'test-model');
-    const module = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(OpenAI).useValue({ responses: { parse: vi.fn().mockResolvedValue({
-        status: 'completed', output_parsed: result, model: 'test-model', id: 'synthetic-response',
-      }) } }).compile();
+    vi.stubEnv('GEMINI_MODEL', 'gemini-test');
+    vi.stubEnv('GEMINI_API_KEY', 'test-only-key');
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(result) }] } }],
+      modelVersion: 'gemini-test', responseId: 'synthetic-response',
+    })));
+    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = module.createNestApplication({ logger: false });
     await app.init();
     prisma = app.get(PrismaService);
@@ -34,7 +35,7 @@ describe('HTTP → service → PostgreSQL', () => {
       await prisma.claim.deleteMany({ where: { formulaVersion: marker } });
     }
     if (app) await app.close();
-    vi.unstubAllEnvs();
+    vi.unstubAllEnvs(); vi.unstubAllGlobals();
   });
 
   it('returns exactly the assessment saved in the database', async () => {

@@ -1,121 +1,122 @@
 import { useState } from 'react';
-import { examples } from './examples';
-
-const emptyForm = { claim: '', formulaVersion: '', evidence: '' };
-const verdictLabels = {
-  SUPPORTED: 'Supported by the submitted evidence',
-  NOT_SUPPORTED: 'The evidence does not support this wording',
-  INSUFFICIENT_EVIDENCE: 'More evidence is needed',
-};
+import { products, roleInfo } from './examples';
+import { assessWithGemini, demoAssessment, newClaim, seedClaims, stageLabels, transition } from './workflow';
+import { AssessmentResult, BusinessView, EvaluatorView, ManagerView, NewClaimForm, ScientistView } from './RoleViews';
 
 export default function ClaimAssessment() {
-  const [form, setForm] = useState(emptyForm);
-  const [result, setResult] = useState(null);
+  // shortcut: in-memory demo users and workflow; add server-side identity/persistence before shared use.
+  const [claims, setClaims] = useState(seedClaims);
+  const [role, setRole] = useState('business');
+  const [selectedId, setSelectedId] = useState('CLM-002');
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
+  const claim = claims.find(item => item.id === selectedId) ?? claims[0];
+  const user = roleInfo[role];
+  const product = products.find(item => item.id === claim.productId);
 
-  function update(nextForm) {
-    setForm(nextForm);
-    setResult(null);
+  function changeView(nextRole) {
+    setRole(nextRole);
+    setAdding(false);
     setError('');
+    setNotice('');
   }
 
-  async function submit(event) {
-    event.preventDefault();
-    setLoading(true);
-    setResult(null);
-    setError('');
+  function act(action, data) {
     try {
-      const response = await fetch('/api/claims/assess', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(typeof data.message === 'string' ? data.message : 'Unable to assess this submission.');
-      }
-      setResult(data);
+      const next = transition(claim, role, action, data);
+      setClaims(items => items.map(item => item.id === claim.id ? next : item));
+      setError('');
+      setNotice(action === 'evidence' ? '' : `Saved in this demo. Next: ${stageLabels[next.stage].toLowerCase()}.`);
+      return true;
     } catch (failure) {
-      setError(failure instanceof TypeError || failure instanceof SyntaxError
-        ? 'Could not reach the assessment service. Check that the API is running and try again.'
-        : failure.message || 'Unable to complete the assessment. Please try again.');
+      setError(failure.message);
+      return false;
+    }
+  }
+
+  async function evaluate(source) {
+    setError('');
+    setNotice('');
+    if (source === 'demo') {
+      act('assess', { assessment: demoAssessment(claim.scenario) });
+      return;
+    }
+    act('evidence', { evidence: claim.evidence });
+    setLoading(true);
+    try {
+      const result = await assessWithGemini(claim, AbortSignal.timeout(50000));
+      act('assess', { assessment: result });
+    } catch (failure) {
+      setError(failure.name === 'TimeoutError' ? 'The Gemini request timed out. Please try again.'
+        : failure instanceof TypeError || failure instanceof SyntaxError ? 'Could not reach the API. Check that the backend is running.' : failure.message);
     } finally {
       setLoading(false);
     }
   }
 
+  function addClaim(values) {
+    try {
+      const created = newClaim(values, `CLM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`);
+      setClaims(items => [...items, created]);
+      setSelectedId(created.id);
+      setAdding(false);
+      setError('');
+      setNotice('Claim raised. Switch to Claim manager to find nearby products and formulas.');
+    } catch (failure) { setError(failure.message); }
+  }
+
   return (
-    <div className="app-shell">
-      <header className="masthead">
-        <a className="wordmark" href="/" aria-label="Claims Intelligence home">CI<span>Claims Intelligence</span></a>
-        <span className="workspace-label">R&amp;I · Evidence workspace</span>
-      </header>
-      <main>
-        <div className="page-intro">
-          <p className="eyebrow">FROM CLAIM TO EVIDENCE</p>
-          <h1>A closer look at<br />the science behind the claim.</h1>
-          <p className="intro-copy">Compare a proposed product claim with its study evidence.<br className="desktop-break" /> Get a clear recommendation to support your review.</p>
-        </div>
-        <ol className="steps" aria-label="Assessment process">
-          <li><span>01</span> Define the claim</li>
-          <li><span>02</span> Add study evidence</li>
-          <li><span>03</span> Review the assessment</li>
-        </ol>
-        <div className="review-grid">
-          <section className="panel submission-panel" aria-labelledby="submission-title">
-            <div className="panel-heading"><h2 id="submission-title">Your submission</h2><span className="small-label">01 / INPUT</span></div>
-            <form onSubmit={submit}>
-              <fieldset disabled={loading}>
-                <legend className="visually-hidden">Claim and study details</legend>
-                <div className="examples">
-                  <p>Start with a synthetic example</p>
-                  <div className="example-buttons">{examples.map(example => (
-                    <button key={example.name} type="button" className="chip" onClick={() => update({
-                      claim: example.claim, formulaVersion: example.formulaVersion, evidence: example.evidence,
-                    })}>{example.name}</button>
-                  ))}</div>
+    <div className="workspace">
+      <aside className="sidebar">
+        <a href="/" className="wordmark">CI<span>Claims<br />Intelligence</span></a>
+        <p className="nav-caption">DEMO USERS</p>
+        <nav aria-label="Demo roles">{Object.entries(roleInfo).map(([id, info], index) => (
+          <button key={id} className={`role-button ${role === id ? 'active' : ''}`} aria-pressed={role === id}
+            disabled={loading} onClick={() => changeView(id)}>
+            <span className="role-number">0{index + 1}</span><span>{info.label}<small>{info.person}</small></span>
+          </button>
+        ))}</nav>
+        <div className="sidebar-note"><span className="live-dot" />Human judgement, at every step.<p>AI recommends.<br />People decide.</p></div>
+        <button className="reset-button" disabled={loading} onClick={() => { setClaims(seedClaims()); setSelectedId('CLM-002'); setAdding(false); setError(''); setNotice('The three dummy cases have been restored.'); }}>Reset dummy workspace</button>
+      </aside>
+      <div className="workspace-body">
+        <header className="topbar"><span>Research &amp; Innovation <span className="separator">/</span> Claim workspace</span><div className="identity"><span className="avatar">{user.initials}</span><span>{user.person}<small>{user.label}</small></span></div></header>
+        <main>
+          <div className="demo-banner"><strong>DEMO WORKSPACE</strong><span>Dummy products, studies and users. Changes last until refresh. Gemini runs only when requested.</span></div>
+          <div className="page-heading"><div><p className="eyebrow">THE EVIDENCE BEHIND THE PROMISE</p><h1>{user.title}</h1><p>{user.description}</p></div>{role === 'business' && <button className="primary" onClick={() => { setAdding(true); setError(''); setNotice(''); }}>+ Raise a claim</button>}</div>
+          <div className="overview-stats"><div><span>Claims in workspace</span><strong>{claims.length.toString().padStart(2, '0')}</strong></div><div><span>Awaiting human review</span><strong>{claims.filter(item => item.stage === 'evaluator').length.toString().padStart(2, '0')}</strong></div><div><span>Ready for Business</span><strong>{claims.filter(item => item.stage === 'business').length.toString().padStart(2, '0')}</strong></div></div>
+          <div className="work-grid">
+            <section className="claim-list" aria-label="Claims"><div className="list-heading"><h2>Claim portfolio</h2><span>{claims.length} claims</span></div>{claims.map(item => (
+              <button key={item.id} className={`claim-card ${claim.id === item.id && !adding ? 'selected' : ''}`}
+                disabled={loading} aria-pressed={claim.id === item.id && !adding} onClick={() => { setSelectedId(item.id); setAdding(false); setError(''); setNotice(''); }}>
+                <span className="card-id">{item.id}<span>{item.assessment ? `${Math.round(item.assessment.confidence * 100)}%` : 'Pending'}</span></span>
+                <strong>{item.title}</strong><span className="card-claim">{item.text}</span>
+                <span className={`stage-pill ${item.stage}`}>{stageLabels[item.stage]}</span>
+                {item.assessment && <small>{item.assessment.source === 'demo' ? 'Scripted confidence' : 'Gemini confidence'} · {item.review ? 'Human reviewed' : 'Human review pending'}</small>}
+              </button>
+            ))}<p className="portfolio-note">Scores describe assessment certainty, not product efficacy. No score bypasses review.</p></section>
+            <div className="detail-column">
+              {error && <p className="error" role="alert">{error}</p>}
+              <p className="notice" role="status">{notice}</p>
+              {adding ? <NewClaimForm onSubmit={addClaim} onCancel={() => setAdding(false)} /> : <>
+                <section className="panel claim-detail"><div className="section-heading"><span className="eyebrow">{claim.id} · CLAIM BRIEF</span><span className={`stage-pill ${claim.stage}`}>{stageLabels[claim.stage]}</span></div><h2>{claim.text}</h2><p>{claim.brief}</p><div className="formula-strip"><span>Matched product<strong>{product?.name ?? 'Not matched yet'}</strong></span><span>Formula reference<strong>{claim.formulaVersion || 'Awaiting match'}</strong></span></div></section>
+                <ol className="handoff" aria-label="Workflow progress">{[['manager', 'Match'], ['scientist', 'Formulate'], ['evaluator', 'Evaluate'], ['business', 'Decide']].map(([step, label], i) => <li key={step} aria-current={claim.stage === step ? 'step' : undefined} className={claim.stage === step ? 'current' : ''}><span>0{i + 1}</span>{label}</li>)}</ol>
+                <div key={`${claim.id}-${role}-${claim.stage}`}>
+                  {role === 'business' && <BusinessView claim={claim} onAction={act} />}
+                  {role === 'manager' && <ManagerView claim={claim} onAction={act} />}
+                  {role === 'scientist' && <ScientistView claim={claim} onAction={act} />}
+                  {role === 'evaluator' && <EvaluatorView claim={claim} onAction={act} onEvaluate={evaluate} loading={loading} />}
                 </div>
-                <label htmlFor="formula">Formula version</label>
-                <input id="formula" value={form.formulaVersion} required maxLength={120}
-                  placeholder="e.g. PARIS-RI-001-v3" autoComplete="off"
-                  onChange={e => update({ ...form, formulaVersion: e.target.value })} />
-                <label htmlFor="claim">Proposed claim</label>
-                <textarea id="claim" className="claim-input" value={form.claim} required maxLength={2000}
-                  placeholder="e.g. Reduces wrinkles by 20% in 4 weeks"
-                  onChange={e => update({ ...form, claim: e.target.value })} />
-                <div className="field-heading"><label htmlFor="evidence">Study evidence</label><span>Text only</span></div>
-                <textarea id="evidence" className="evidence-input" value={form.evidence} required maxLength={30000}
-                  aria-describedby="evidence-help" placeholder="Paste the study methods, results and limitations…"
-                  onChange={e => update({ ...form, evidence: e.target.value })} />
-                <p className="field-help" id="evidence-help">Include the formula, population, endpoint, duration and results. Use synthetic or approved de-identified evidence.</p>
-                <button className="submit-button" type="submit" disabled={loading || Object.values(form).some(value => !value.trim())}>
-                  {loading ? 'Reviewing evidence…' : 'Assess claim'}<span aria-hidden="true">↗</span>
-                </button>
-              </fieldset>
-            </form>
-            {error && <p className="error" role="alert">{error}</p>}
-          </section>
-          <section className="panel result-panel" aria-labelledby="result-title" aria-busy={loading}>
-            <div className="panel-heading"><h2 id="result-title">Assessment</h2><span className="small-label">02 / REVIEW</span></div>
-            <div role="status" aria-live="polite">
-              {loading ? <div className="empty-state"><div className="review-symbol loading" aria-hidden="true">✳</div><h3>Reading the evidence</h3><p>Comparing the claim with the study’s methods, findings and limitations. This can take up to 45 seconds.</p></div>
-                : result ? <div className="assessment-result">
-                  <p className={`verdict-tag ${result.justified ? 'supported' : ''}`}>{verdictLabels[result.verdict]}</p>
-                  <h3 className="verdict">Justified: {result.justified ? 'Yes' : 'No'}</h3>
-                  <div className="confidence-row"><span>Model confidence</span><strong>{Math.round(result.confidence * 100)}%</strong></div>
-                  <p className="field-help">Certainty in this assessment, not a clinical probability.</p>
-                  <div className="reasoning"><h4>Reasoning</h4><p>{result.reasoning}</p></div>
-                  {result.missingEvidence.length > 0 && <div className="gaps"><h4>What’s missing</h4><ul>{result.missingEvidence.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
-                  <p className="saved-note">Saved assessment <span>{result.assessmentId}</span></p>
-                </div>
-                  : <div className="empty-state"><div className="review-symbol" aria-hidden="true">✳</div><h3>Every claim needs a clear foundation.</h3><p>Add a claim and its study evidence to see the assessment, confidence and reasoning here.</p><div className="checks"><span>Formula relevance</span><span>Measured benefit</span><span>Timing &amp; study quality</span></div></div>}
+                {role !== 'evaluator' && role !== 'business' && claim.assessment && <section className="panel"><AssessmentResult result={claim.assessment} /></section>}
+                <section className="panel activity"><h3>Handoff history</h3><ol>{claim.history.map((event, index) => <li key={index}><span className="history-dot" /><div><strong>{event.role}</strong><p>{event.text}</p></div></li>)}</ol></section>
+              </>}
             </div>
-            <aside className="review-note"><span aria-hidden="true">i</span><p><strong>A second pair of eyes.</strong> This assessment supports the evaluator’s judgement. Final approval stays with the authorized reviewer.</p></aside>
-          </section>
-        </div>
-      </main>
-      <footer><span>Claims Intelligence Engine</span><span>Technical exercise · Synthetic examples · Human review required</span></footer>
+          </div>
+        </main>
+        <footer><span>Claims Intelligence Engine</span><span>Independent technical demo · No clinical or launch approval</span></footer>
+      </div>
     </div>
   );
 }

@@ -1,24 +1,31 @@
 # Verification notes
 
-Checked locally on 4 November 2026 with Node 22.23.1 and PostgreSQL 17 in Docker.
+Updated 6 November 2026. Checked with Node 22 and PostgreSQL 17 in Docker.
 
 | Check | Result |
 |---|---|
-| Prisma client generation | Passed |
-| Migration against PostgreSQL | Passed |
-| TypeScript backend and Vite production build | Passed |
-| HTTP/service tests | 17 passed |
-| React form tests | 3 passed |
-| Real PostgreSQL integration tests | 2 passed |
-| Runtime dependency audit | No known vulnerabilities reported after patched transitive overrides |
-| Browser → Vite proxy → running NestJS API | Confirmed; missing provider settings displayed as a clear error |
-| Real OpenAI request | Not run; no API key/model configured |
+| Backend TypeScript and frontend production builds | Passed |
+| Gemini HTTP/service tests | 19 passed |
+| React/workflow tests | 12 passed |
+| PostgreSQL integration tests | 2 passed |
+| Existing schema migration | No pending changes; existing data preserved |
+| Browser dummy walkthrough | Evaluator conclusion reached Business; final hold decision recorded |
+| Browser → Vite proxy → running API | Missing Gemini configuration correctly reported; previous result cleared |
+| Live Gemini call | Not run: no Gemini key/model configured in this checkout |
 | Scientific accuracy / calibrated confidence | Not evaluated |
 
-The PostgreSQL tests use a controlled model response. They verify persistence and transaction rollback, not model quality. The React tests cover result rendering, API errors, pending state and clearing stale results.
+Tests control Gemini HTTP responses; they do not establish real provider availability or scientific accuracy. They verify the REST request shape, key header, structured response parsing, blocks/truncation/errors, confidence bounds, persistence and rollback. Frontend checks include all four handoffs, a new formula proposal, required human notes, no confidence-based bypass, live-vs-dummy result labels and stale-result clearing.
 
-The browser was checked using the actual local development servers. The screenshot below shows the real missing-configuration response; it is deliberately not presented as a successful AI assessment.
+Dummy workflow changes are memory-only and reset on refresh. Live assessment records are saved to PostgreSQL, but reviewer and Business decisions are not yet server-backed.
 
-![Local review screen showing the unconfigured-provider message](images/local-review.jpg)
+## Evaluator demo
 
-Before presenting a live AI demonstration, configure the provider and submit the synthetic examples. Review the reasoning against the study details, including numerical wording, timepoints and missing information. Before real-world use, obtain expert review and implement the pilot safeguards described in the proposal.
+The middle-confidence case uses a scripted 64% result. The evaluator records a reasoned request for more evidence.
+
+![Evaluator's medium-confidence human review](images/local-review.jpg)
+
+## Business summary
+
+After sign-off, Business receives the evaluator's conclusion and can record a final decision. The screenshot shows a dummy hold decision, not an automatic AI approval.
+
+![Business summary after human review](images/business-summary.jpg)

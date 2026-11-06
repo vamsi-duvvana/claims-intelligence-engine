@@ -19,3 +19,15 @@ export const checkedAssessment = modelAssessment.extend({
   reasoning: z.string().trim().min(1).max(6000),
   missingEvidence: z.array(z.string().trim().min(1).max(500)).max(20),
 });
+
+export const geminiResponse = z.object({
+  modelVersion: z.string().min(1),
+  responseId: z.string().min(1),
+  promptFeedback: z.object({ blockReason: z.string().optional() }).optional(),
+  candidates: z.array(z.object({
+    finishReason: z.literal('STOP'),
+    content: z.object({
+      parts: z.array(z.object({ text: z.string().optional(), thought: z.boolean().optional() })),
+    }),
+  })).min(1),
+});

@@ -1,115 +1,78 @@
-# Technical proposal
+# Technical proposal — revised scope
 
-## Business understanding
+Updated 6 November 2026.
 
-The business team starts with a proposed product benefit. Claim managers decide which claims are relevant and feasible. Scientists formulate the product and identify the version being tested. Evaluators conduct or review testing and attach the evidence used to substantiate the claim.
+## Business process
 
-The feature implemented here helps at that last handoff: an evaluator submits a claim and evidence, gets an AI recommendation, and can inspect the result. It does not implement the whole product lifecycle or make the final approval decision.
+Business raises a claim. The Claim manager identifies nearby products and existing formulas relevant to the requested benefit. The Scientist checks whether to keep a formula or propose a new version that could strengthen the claim. The Evaluator reviews studies and assesses the claim. Finally, Business receives the recommendation **and the human review**, then decides whether to proceed, hold or stop.
 
 ```text
-Business proposal → Claim screening → Formula submission
-                 → Evaluator study/report → AI assessment → Human review
+Business → Claim manager → Scientist → Evaluator → Business
+Raise       Match product    Review       Study +     Summary +
+claim       and formula      formula      judgement   final decision
 ```
 
-A formula can have several claims, and a claim can be assessed against different evidence over time. A formulation or stability test is not automatically an efficacy study. Changing the claim wording, formula or evidence can change the answer.
+The frontend now demonstrates all five handoffs using four fictional users. The initial three cases are at evaluator review so a presenter can immediately show high, medium and low confidence. Raising a new claim starts at product matching and demonstrates the whole sequence.
 
-## What counts as support?
+## What each screen does
 
-For “Reduces wrinkles by 20% in four weeks,” a 24% improvement after eight weeks is not enough to establish the timing. Hydration measurements do not directly establish wrinkle reduction. Ingredient findings do not automatically apply to the finished formula.
+- **Business:** raise a claim, see the matched product/formula and scientific rationale, read the assessment and evaluator conclusion, then record a final decision with a reason.
+- **Claim manager:** inspect a dummy nearby-product shortlist, choose an existing formula and explain its relevance. The shortlist is a fixed wrinkle-care catalogue; no similarity search is implied.
+- **Scientist:** keep the formula or propose a new version with a rationale. A new version clears inherited evidence and results; reformulating does not itself substantiate a claim.
+- **Evaluator:** enter study text, choose a scripted result or request a real Gemini assessment, then make an explicit human conclusion and record its conditions.
 
-The assessment prompt therefore compares:
+No score skips human review. Business cannot decide until the evaluator has signed off. Evaluators may challenge the AI; their conclusion and rationale remain separate from its recommendation. Business retains the final decision, including holding an apparently promising claim for more work.
 
-1. Finished product and formula version.
-2. Exact measured benefit and numerical wording.
-3. Study duration and measurement timepoint.
-4. Population, comparator and use conditions.
-5. Methods, uncertainty and stated limitations.
+## Dummy data and confidence
 
-The evaluator needs to define the scientific standard for each claim type. I have not invented a universal sample size or p-value threshold. A point estimate above the promised percentage is not, on its own, a complete substantiation policy.
+The synthetic cases have fixed scores of 92%, 64% and 28%. The medium case uses a small pilot with a wide uncertainty interval and missing comparator results, making it useful for a human-in-the-loop walkthrough. Scores are presentation fixtures, not scientific measurements or model outputs. Loading a dummy result does not calculate anything from edited claim or study text; the UI states this explicitly.
 
-Three outcomes preserve the distinction between negative findings and missing information:
+Confidence means certainty in an assessment, not probability of product efficacy. A low score does not mean a product fails, and a high score can accompany a finding of insufficient evidence. Confidence colours are only visual aids. They do not authorize a claim.
 
-| Stored verdict | UI | Meaning |
-|---|---|---|
-| SUPPORTED | Justified: Yes | Evidence adequately supports the exact claim |
-| NOT_SUPPORTED | Justified: No | Reported findings fail to support that wording |
-| INSUFFICIENT_EVIDENCE | Justified: No, more evidence needed | Missing or inconclusive information prevents support |
+## Architecture and persistence
 
-Confidence is the model’s reported certainty in its assessment. It is not calibrated, a clinical confidence interval or a probability that the product works. No confidence threshold automatically approves a claim.
+```text
+Four-role React demo
+  ├─ Dummy actions → in-memory state → human review → Business summary
+  └─ Explicit Gemini button → POST /api/claims/assess
+                           → validate input
+                           → Google Gemini structured JSON
+                           → validate response
+                           → Prisma nested write → PostgreSQL
+                           → saved assessment → React
+```
 
-## Research performed
+The frontend workflow is deliberately in memory, as requested for dummy data. Refreshing resets it. There are no actual accounts, cross-browser synchronization or server-side workflow permissions. The role switcher is a demo device.
 
-I checked official documentation to answer the design questions below. This was documentation research, not validation against real clinical studies or L’Oréal’s internal processes.
+The existing Claim/Assessment schema and endpoint are preserved, so previously saved records need no destructive migration. Only live AI assessment records are durable. Matching, proposed formulas, human reviews and business decisions are not saved to PostgreSQL in this scope. A production workflow would need its own persistent records and authorization.
 
-| Question | Source | Decision |
-|---|---|---|
-| How should the model return a stable result? | [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) | Use Responses API parsing with a schema and reject absent/incomplete output |
-| What should happen to submitted data? | [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data) | Set `store: false`, keep the key server-side, and require a data-handling review before real reports |
-| How should invalid input be handled? | [NestJS validation](https://docs.nestjs.com/techniques/validation) | Validate at the server boundary; this small implementation uses Zod directly in the service |
-| How do related inserts stay consistent? | [Prisma nested writes](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions) | Insert the Claim and Assessment atomically |
-| Why check product relevance and wording? | [EU Regulation 655/2013, Annex](https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX%3A32013R0655) | Build the rubric around evidence relevant to the product and benefit; retain evaluator review |
+## Gemini migration
 
-The regulatory source informs the design. This exercise does not establish legal acceptability for any particular wording or market.
+The server uses Node's built-in `fetch` against the Gemini `generateContent` REST endpoint. This replaces the OpenAI SDK and removes that dependency without adding an SDK for a single HTTP request.
 
-Still needed: an expert-labelled evaluation set, model cost/latency measurements, agreed scientific acceptance criteria and the organization’s approved confidentiality/hosting policy.
+`GEMINI_API_KEY` and `GEMINI_MODEL` are read only on the server. The key is in the `x-goog-api-key` header, not a URL. A fixed system instruction is separate from untrusted claim/evidence content. JSON Schema comes from the existing Zod schema; parsed output is validated again for verdict, score range and reasoning bounds. The service accepts only completed `STOP` candidates and ignores thought parts. Safety blocks, truncated output, invalid JSON and provider failures are errors, never negative claim assessments.
 
-## Database design
+The provider call finishes before the atomic Claim/Assessment insert. PostgreSQL saves the exact input, result, model version, response ID and prompt version. The UI only identifies a Gemini result as saved after the API returns success. There are no retries or automatic dummy fallbacks. A failed request clears the previous displayed assessment so old dummy output cannot look like a new Gemini response.
 
-The complete [Prisma schema](../apps/api/prisma/schema.prisma) defines two tables:
+## Research and design decisions
 
-- **Claim:** immutable submitted wording and formula-version reference.
-- **Assessment:** evidence snapshot, verdict, confidence, reasoning, missing evidence, model/prompt metadata and timestamp.
+- [Gemini structured output guidance](https://ai.google.dev/gemini-api/docs/structured-output): JSON Schema constrains shape; application validation is still required. The structured-output capability is not proof of scientific correctness.
+- [Google's v1beta API discovery schema](https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta): checked the `generationConfig.responseMimeType`, `responseJsonSchema`, `systemInstruction`, `modelVersion` and `responseId` fields used by this REST integration.
+- [Prisma nested writes](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions): retained atomic related writes and the existing rollback test.
+- The prior proposal's evidence rubric remains: compare exact wording, finished formula, endpoint, effect magnitude, timepoint, population, comparator and study limitations. Do not invent universal scientific acceptance cutoffs.
 
-One Claim has many Assessments. The current route creates a new claim and its first assessment. This keeps the exercise small; appending a reassessment and grouping revised claims are later work. No update/delete routes are exposed.
+Gemini model access, cost, latency and scientific quality have not been benchmarked. No data-retention guarantees from the former provider are carried over; review Google's applicable service terms and organizational data policy before sending real dossiers.
 
-Evidence belongs to the assessment because the same claim may be reviewed against a different study. The database also enforces confidence between 0 and 1. `justified` is derived from the verdict rather than stored separately.
+## Why keep it this small?
 
-## Backend design
+React local state is enough to demonstrate the revised workflow with dummy data. NestJS, PostgreSQL and Prisma already implement assessment persistence and remain appropriate for that path. Native fetch and the installed Zod library cover Gemini integration. A new authentication system, workflow engine, vector database or agent framework would add scope without improving this requested demonstration.
 
-The [controller](../apps/api/src/claims/claims.controller.ts) accepts `POST /api/claims/assess`. The [service](../apps/api/src/claims/claims.service.ts) owns the flow:
+## Evolution roadmap
 
-1. Reject invalid fields, extra properties and oversized text.
-2. Send the claim, formula reference and evidence as data with a fixed instruction prompt.
-3. Parse a structured assessment and validate its business bounds.
-4. Save claim and assessment in one nested write.
-5. Return fields from the saved record.
+1. **Persist the workflow:** Claim versions, Product/Formula records, scientific proposals, studies, reviewer decisions and business decisions, with immutable history.
+2. **Add real users:** identity, role permissions and server-side transition checks; the browser must never be the authority for approvals.
+3. **Improve evidence quality:** document ingestion, source page/table references, expert-labelled evaluations and model regression checks. Measure false support and reviewer overrides before choosing approval policies.
+4. **Operational reliability:** idempotency, bounded retries, quotas, background jobs when latency demands them, and safe audit/observability records.
+5. **Knowledge reuse:** permission-aware nearby-product matching, approved study retrieval, formula-change reassessment triggers and market/language-specific review policies.
 
-The external call is outside the database transaction, so a slow model does not hold a database transaction open. Provider failure is separate from an assessment of insufficient evidence. A successful model call followed by a database failure returns an error rather than an unsaved result.
-
-The provider call has a 45-second timeout and no automatic retries. Retries require idempotency and a clear failure policy before they are useful here. There is no distributed transaction between OpenAI and PostgreSQL: a user retry can repeat a paid call or duplicate a saved submission.
-
-Study text is untrusted. The prompt tells the model not to follow embedded instructions; the call has no tools or access to other reports. This reduces the scope of prompt injection but does not eliminate semantic errors. Application logs avoid evidence and raw provider errors.
-
-## Frontend design
-
-The [React JSX component](../apps/web/src/ClaimAssessment.jsx) uses a native form and local state. It sends the three fields, waits for the response and displays the required Yes/No, confidence and reasoning. It also shows missing information and the saved assessment ID.
-
-Three synthetic examples make review easier without pretending to be real studies. During submission, inputs are disabled. Editing any field clears the prior result, preventing the user from mistaking an old assessment for an evaluation of new evidence. Error messages are announced accessibly, and model output is rendered as plain text.
-
-## Why this architecture?
-
-| Choice | Reason |
-|---|---|
-| NestJS | Required by the brief; controller/service split stays easy to read |
-| PostgreSQL + Prisma | Relational history, migrations and atomic related writes |
-| React JSX + Vite | Required UI technology with little setup |
-| OpenAI SDK + Zod | A typed response shape and runtime validation without an agent framework |
-| One synchronous endpoint | Fits a bounded text assessment and the one-day budget |
-| No retrieval system | The evidence to assess is already in the request |
-
-There is no need for microservices, a queue, a vector database or a generic AI abstraction to complete this task. Those choices should follow a measured need.
-
-## Roadmap with more time
-
-| Priority | Work | Reason / release condition |
-|---|---|---|
-| Reliable pilot | SSO, roles, access checks, verified formula versions, reviewer decisions, idempotency and audit events | Required before shared use and confidential reports |
-| Evidence workspace | PDF ingestion, extraction/OCR, source page/table references and retention controls | Reviewers must be able to verify material statements against the source |
-| Scientific quality | Expert-labelled cases, false-support analysis, prompt/model regression checks and confidence calibration research | Establish an agreed quality baseline before broadening use |
-| Full workflow | Claim-manager screening, scientist/evaluator handoffs, claim versioning and reassessment triggers | Keep assessments attached to the right product/formula and avoid stale decisions |
-| Operational scale | Background jobs, durable retries, quotas and monitoring | Add when actual latency/volume requires them |
-| Broader intelligence | Approved evidence retrieval, conflicting-study detection, French/English support and market-specific review policies | Reuse knowledge while preserving source access and reviewer authority |
-
-Measure evaluator time saved, agreement with expert review, false-support rate, override reasons, latency, failure rate and cost per assessment. Set targets with the scientific team after measuring a baseline. Approval rate is not a useful success metric by itself.
-
-I would start with evaluator feedback and scientific evaluation before fine-tuning. If mistakes are caused by missing source context, a larger model or more training will not fix the underlying evidence gap.
+Success should mean faster, better-supported reviewer decisions—not more claims approved. Track evaluator time, agreement with expert review, false-support rate, override reasons, latency and cost.

@@ -1,44 +1,22 @@
-# Build plan and handoff
+# Revised build plan and demo handoff
 
-## Scope
+## Implemented scope
 
-One claim, one formula-version reference and one pasted study text per request. Complete the request-to-database-to-screen flow. Keep the broader business workflow in the roadmap.
+Four role-specific frontend views, three dummy confidence cases, explicit evaluator review, a final Business decision and a Gemini-backed assessment path. The server still persists only live Claim/Assessment records; the multi-role workflow is a frontend demonstration.
 
-## One-day sequence
+## Demo script
 
-| Time | Work | Done when |
-|---|---|---|
-| Hour 1 | Agree input/output contract and assessment rubric | Supported, unsupported and insufficient examples are defined |
-| Hour 2 | Prisma schema, migration and PostgreSQL setup | Related records can be created together |
-| Hours 3–4 | NestJS endpoint and provider integration | Validated output is saved before returning; failure paths work |
-| Hour 5 | React submission and result screen | Loading, success, editing and errors behave correctly |
-| Hour 6 | HTTP, UI and database tests | Tests verify the behavior that could mislead a reviewer or lose consistency |
-| Hour 7 | Synthetic cases and manual walkthrough | Timing/endpoint/formula mismatches are reviewed |
-| Hour 8 | README, proposal and demo rehearsal | Another developer can run the project and explain the tradeoffs |
+1. Start the frontend with `npm run dev -w @claims/web`. No key or database is needed.
+2. In Business, compare the 92%, 64% and 28% cases. Notice that no final decision is available before human review.
+3. Select the 64% pilot and switch to Evaluator. Read the limitations. Choose a conclusion, explain it and sign off.
+4. Switch to Business. Inspect the human conclusion beside the scripted recommendation; decide to hold, stop or proceed.
+5. Raise a new claim. As Claim manager choose a related product and formula. As Scientist propose a different version. As Evaluator attach fresh study text, load a clearly labelled dummy assessment and review it.
+6. For a real provider demonstration, configure `GEMINI_API_KEY` and `GEMINI_MODEL`, start PostgreSQL and the backend, then use **Evaluate with Gemini**. Never present scripted scores as Gemini output.
 
-## Acceptance checks
+## Validation
 
-- Valid input calls the provider, saves both records and returns the saved result.
-- Invalid input does not call the model or write to the database.
-- Unsupported and insufficient outcomes retain their distinction while displaying No.
-- Refusal, incomplete output and provider errors never become a negative assessment.
-- Database failure returns no success and leaves no orphan claim.
-- An edited claim cannot retain a stale assessment on screen.
-- API keys and study text are absent from committed configuration and application logs.
+Build both applications. Run API and frontend tests, then integration tests against PostgreSQL. Check role order, invalid product/formula combinations, required reviewer notes, version-change invalidation, stale-result clearing, Gemini errors and atomic database rollback. In the browser, verify that the evaluator's signed conclusion reaches the Business summary and enables the final decision.
 
-## Five-minute walkthrough
+## Next implementation steps
 
-1. Explain where the evaluator fits in the business handoff.
-2. Open the Prisma schema and show the one-to-many relationship.
-3. Trace the service from validation through provider output to the nested write.
-4. Run a synthetic example with an approved provider configuration.
-5. Show a timing mismatch and a missing-evidence case.
-6. Explain confidence, human review and the next investments.
-
-Without a provider key, demonstrate the UI and automated tests, and state that the live model call has not been run. Do not present test fixtures as AI-generated results.
-
-## Next decisions
-
-Ask the evaluator which numerical wording and study-quality policy they expect; clarify acceptable population and use conditions. Confirm real report formats, identity/role requirements, approved model/data region and retention policy before a pilot.
-
-Add idempotency before automatic retries, verified formula linkage before trusting submitted identities, and source references before reviewers rely on long-report summaries.
+The next complete increment is persistent multi-user workflow state: add real identities/roles and server-side authorization, link claims to versioned products/formulas, store study and human-decision history, and invalidate decisions when inputs change. Add idempotency before automatic retries. Add source-linked report review and expert evaluations before real scientific use. The dummy role switcher is not a substitute for any of these.
